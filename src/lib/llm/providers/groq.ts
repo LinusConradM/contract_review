@@ -13,7 +13,7 @@ export function createGroqProvider(): LLMProvider {
       }
 
       const client = new Groq({ apiKey });
-      const model = request.model ?? DEFAULT_MODEL;
+      const model = request.model ?? process.env.GROQ_MODEL ?? DEFAULT_MODEL;
 
       const response = await client.chat.completions.create({
         model,
