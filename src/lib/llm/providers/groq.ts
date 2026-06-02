@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import type { LLMCompletionRequest, LLMCompletionResult, LLMProvider } from "../types";
+import { mapOpenAIFinishReason, openAIUsage } from "../metadata";
 
 const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 
@@ -25,12 +26,19 @@ export function createGroqProvider(): LLMProvider {
         })),
       });
 
-      const text = response.choices[0]?.message?.content?.trim();
+      const choice = response.choices[0];
+      const text = choice?.message?.content?.trim();
       if (!text) {
         throw new Error("Groq returned an empty response");
       }
 
-      return { provider: "groq", model, text };
+      return {
+        provider: "groq",
+        model: response.model || model,
+        text,
+        finishReason: mapOpenAIFinishReason(choice?.finish_reason),
+        usage: openAIUsage(response.usage),
+      };
     },
   };
 }

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { LLMCompletionRequest, LLMCompletionResult, LLMProvider } from "../types";
+import { anthropicUsage, mapAnthropicStopReason } from "../metadata";
 
 const DEFAULT_MODEL = "claude-3-5-haiku-20241022";
 
@@ -13,7 +14,7 @@ export function createAnthropicProvider(): LLMProvider {
       }
 
       const client = new Anthropic({ apiKey });
-      const model = request.model ?? DEFAULT_MODEL;
+      const model = request.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
 
       const system = request.messages.find((m) => m.role === "system")?.content;
       const messages = request.messages
@@ -41,7 +42,13 @@ export function createAnthropicProvider(): LLMProvider {
         throw new Error("Anthropic returned an empty response");
       }
 
-      return { provider: "anthropic", model, text };
+      return {
+        provider: "anthropic",
+        model: response.model || model,
+        text,
+        finishReason: mapAnthropicStopReason(response.stop_reason),
+        usage: anthropicUsage(response.usage),
+      };
     },
   };
 }

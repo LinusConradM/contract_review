@@ -82,10 +82,14 @@ model ClauseAnalysis {
   explanation     String            @db.Text
   ambiguousTerms  String[]          @default([])
   recommendations String[]          @default([])
-  provider        String
-  model           String
-  rawResponse     String?           @db.Text
-  createdAt       DateTime          @default(now())
+  provider         String
+  model            String
+  finishReason     String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  rawResponse      String?           @db.Text
+  createdAt        DateTime          @default(now())
   decision        ReviewerDecision?
 }
 

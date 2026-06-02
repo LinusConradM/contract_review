@@ -1,4 +1,5 @@
 import { complete } from "@/lib/llm";
+import type { LLMFinishReason, LLMUsage } from "@/lib/llm";
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -9,6 +10,8 @@ export type ClauseAnalysis = {
   recommendations: string[];
   provider: string;
   model: string;
+  finishReason: LLMFinishReason;
+  usage: LLMUsage;
   raw: string;
 };
 
@@ -90,6 +93,8 @@ export async function analyseClauseText(
     recommendations: toStringArray(parsed.recommendations),
     provider: result.provider,
     model: result.model,
+    finishReason: result.finishReason,
+    usage: result.usage,
     raw: result.text,
   };
 }

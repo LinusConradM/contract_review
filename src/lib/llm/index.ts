@@ -10,7 +10,14 @@ import type {
   LLMProviderName,
 } from "./types";
 
-export type { LLMCompletionRequest, LLMCompletionResult, LLMMessage, LLMProviderName } from "./types";
+export type {
+  LLMCompletionRequest,
+  LLMCompletionResult,
+  LLMFinishReason,
+  LLMMessage,
+  LLMProviderName,
+  LLMUsage,
+} from "./types";
 
 const providers: Record<LLMProviderName, () => LLMProvider> = {
   openai: createOpenAIProvider,

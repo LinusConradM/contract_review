@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       provider: result.provider,
       model: result.model,
+      finishReason: result.finishReason,
+      usage: result.usage,
       prompt: TEST_PROMPT,
       response: result.text,
       configuredProviders: configured,

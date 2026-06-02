@@ -31,30 +31,29 @@ export const analyseClause = task({
       ambiguousTerms: analysis.ambiguousTerms.length,
       provider: analysis.provider,
       model: analysis.model,
+      finishReason: analysis.finishReason,
+      totalTokens: analysis.usage.totalTokens,
     });
+
+    const fields = {
+      riskLevel: analysis.riskLevel,
+      explanation: analysis.explanation,
+      ambiguousTerms: analysis.ambiguousTerms,
+      recommendations: analysis.recommendations,
+      provider: analysis.provider,
+      model: analysis.model,
+      finishReason: analysis.finishReason,
+      promptTokens: analysis.usage.promptTokens,
+      completionTokens: analysis.usage.completionTokens,
+      totalTokens: analysis.usage.totalTokens,
+      rawResponse: analysis.raw,
+    };
 
     // clauseId is @unique, so upsert keeps retries idempotent.
     await prisma.clauseAnalysis.upsert({
       where: { clauseId },
-      create: {
-        clauseId,
-        riskLevel: analysis.riskLevel,
-        explanation: analysis.explanation,
-        ambiguousTerms: analysis.ambiguousTerms,
-        recommendations: analysis.recommendations,
-        provider: analysis.provider,
-        model: analysis.model,
-        rawResponse: analysis.raw,
-      },
-      update: {
-        riskLevel: analysis.riskLevel,
-        explanation: analysis.explanation,
-        ambiguousTerms: analysis.ambiguousTerms,
-        recommendations: analysis.recommendations,
-        provider: analysis.provider,
-        model: analysis.model,
-        rawResponse: analysis.raw,
-      },
+      create: { clauseId, ...fields },
+      update: fields,
     });
 
     return { clauseId, riskLevel: analysis.riskLevel };
