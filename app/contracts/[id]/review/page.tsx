@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import type { ReviewReport } from "@/lib/report";
-import ReviewActions from "@/components/ReviewActions";
+import ReviewDashboard from "@/components/ReviewDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +27,16 @@ export default async function ReviewPage({
       title: true,
       status: true,
       summary: { select: { content: true } },
+      clauses: {
+        select: {
+          index: true,
+          analysis: {
+            select: {
+              decision: { select: { approved: true, notes: true } },
+            },
+          },
+        },
+      },
     },
   });
   if (!contract) notFound();
@@ -37,6 +47,18 @@ export default async function ReviewPage({
       report = JSON.parse(contract.summary.content) as ReviewReport;
     } catch {
       report = null;
+    }
+  }
+
+  const initialDecisions: Record<number, { approved: boolean; notes: string }> =
+    {};
+  for (const c of contract.clauses) {
+    const dec = c.analysis?.decision;
+    if (dec) {
+      initialDecisions[c.index] = {
+        approved: dec.approved,
+        notes: dec.notes ?? "",
+      };
     }
   }
 
@@ -83,49 +105,14 @@ export default async function ReviewPage({
             </div>
           </section>
 
-          {report.groups.map((group) => (
-            <section key={group.riskLevel} className="card">
-              <h2>
-                <span className={`badge ${riskBadge(group.riskLevel)}`}>
-                  {group.riskLevel.toLowerCase()} risk
-                </span>{" "}
-                · {group.clauses.length}{" "}
-                {group.clauses.length === 1 ? "clause" : "clauses"}
-              </h2>
-              <ol className="report-clauses">
-                {group.clauses.map((clause) => (
-                  <li key={clause.number} className="report-clause">
-                    <div className="report-clause-num">Clause {clause.number}</div>
-                    <p className="report-clause-text">{clause.text}</p>
-                    <p className="clause-explanation">{clause.explanation}</p>
-                    {clause.ambiguousTerms.length > 0 && (
-                      <p className="clause-tags">
-                        <span className="clause-tags-label">Ambiguous:</span>{" "}
-                        {clause.ambiguousTerms.join(", ")}
-                      </p>
-                    )}
-                    {clause.recommendations.length > 0 && (
-                      <ul className="clause-recs">
-                        {clause.recommendations.map((rec, i) => (
-                          <li key={i}>{rec}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ))}
-
-          <ReviewActions contractId={contract.id} awaiting={awaiting} />
+          <ReviewDashboard
+            contractId={contract.id}
+            awaiting={awaiting}
+            report={report}
+            initialDecisions={initialDecisions}
+          />
         </>
       )}
     </main>
   );
-}
-
-function riskBadge(level: string): string {
-  if (level === "HIGH" || level === "CRITICAL") return "badge-err";
-  if (level === "MEDIUM") return "badge-busy";
-  return "badge-ok";
 }

@@ -562,3 +562,177 @@ pre.result {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* Review dashboard layout: sticky nav + clause column */
+.review-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .review-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.review-nav {
+  position: sticky;
+  top: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.review-progress-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+
+.review-progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.review-progress-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.review-nav-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.review-nav-chip {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.review-nav-chip.nav-approved {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.review-nav-chip.nav-rejected {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.review-nav-chip.nav-pending {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.review-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.review-submit button {
+  width: 100%;
+}
+
+.review-clause-card {
+  border-left: 3px solid var(--border);
+}
+
+.review-clause-card.state-approved {
+  border-left-color: var(--success);
+}
+
+.review-clause-card.state-rejected {
+  border-left-color: #ef4444;
+}
+
+.review-state-tag {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.review-state-tag.tag-approved {
+  color: var(--success);
+}
+
+.review-state-tag.tag-rejected {
+  color: #ef4444;
+}
+
+.clause-decision {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.decision-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.decision-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.decision-btn.approve.active {
+  border-color: var(--success);
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.decision-btn.reject.active {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.save-indicator {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.save-indicator.saved {
+  color: var(--success);
+}
+
+.save-indicator.error {
+  color: #ef4444;
+}
+
+.clause-decision .review-notes {
+  width: 100%;
+}
+
+.review-readonly-note {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}

@@ -4,14 +4,9 @@ import { extractPdfText } from "@/lib/pdf";
 import { readContractFile } from "@/lib/storage";
 import { buildReviewReport } from "@/lib/report";
 import { sendReviewReadyEmail } from "@/lib/email";
+import type { ReviewDecision } from "@/lib/review";
 import { splitContractClauses } from "./splitContractClauses";
 import { analyseClause } from "./analyseClause";
-
-type ReviewDecision = {
-  approved: boolean;
-  notes?: string;
-  reviewer?: string;
-};
 
 function dashboardUrl(contractId: string): string {
   const base = process.env.APP_URL || "http://localhost:3000";
@@ -174,7 +169,13 @@ export const processContractUpload = task({
         throw review.error;
       }
       const decision = review.output;
-      logger.log("Review token completed", { contractId, decision });
+      const rejected = decision.clauses.filter((c) => !c.approved);
+      logger.log("Review token completed", {
+        contractId,
+        approved: decision.approved,
+        reviewer: decision.reviewer,
+        rejectedClauses: rejected.map((c) => c.clauseIndex),
+      });
 
       await prisma.contract.update({
         where: { id: contractId },
@@ -182,7 +183,11 @@ export const processContractUpload = task({
           status: "COMPLETED",
           error: decision.approved
             ? null
-            : `Changes requested${decision.notes ? `: ${decision.notes}` : ""}`,
+            : `Changes requested on ${rejected.length} clause${
+                rejected.length === 1 ? "" : "s"
+              } (${rejected.map((c) => `#${c.clauseIndex}`).join(", ")})${
+                decision.notes ? `: ${decision.notes}` : ""
+              }`,
         },
       });
 
