@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  sessions     Session[]
+  contracts    Contract[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Contract {
+  id           String            @id @default(cuid())
+  title        String
+  fileName     String
+  status       ContractStatus    @default(UPLOADED)
+  uploadedAt   DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clauses      Clause[]
+  summary      ContractSummary?
+}
+
+enum ContractStatus {
+  UPLOADED
+  EXTRACTING
+  ANALYZING
+  AWAITING_REVIEW
+  COMPLETED
+  FAILED
+}
+
+model Clause {
+  id         String          @id @default(cuid())
+  index      Int
+  text       String          @db.Text
+  contractId String
+  contract   Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  analysis   ClauseAnalysis?
+
+  @@unique([contractId, index])
+}
+
+model ClauseAnalysis {
+  id          String             @id @default(cuid())
+  clauseId    String             @unique
+  clause      Clause             @relation(fields: [clauseId], references: [id], onDelete: Cascade)
+  riskLevel   RiskLevel
+  summary     String             @db.Text
+  concerns    String[]           @default([])
+  provider    String
+  model       String
+  rawResponse String?            @db.Text
+  createdAt   DateTime           @default(now())
+  decision    ReviewerDecision?
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model ReviewerDecision {
+  id         String         @id @default(cuid())
+  analysisId String         @unique
+  analysis   ClauseAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  approved   Boolean
+  notes      String?        @db.Text
+  decidedAt  DateTime       @default(now())
+}
+
+model ContractSummary {
+  id         String   @id @default(cuid())
+  contractId String   @unique
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+}

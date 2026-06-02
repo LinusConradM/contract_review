@@ -1,0 +1,40 @@
+{
+  "name": "contract_review",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others --names \"next,trigger\" --prefix-colors \"yellow,blue\" \"next dev\" \"npm run dev:trigger\"",
+    "dev:next": "next dev",
+    "dev:trigger": "trigger dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "deploy:trigger": "trigger deploy",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@prisma/client": "^6.8.2",
+    "@trigger.dev/sdk": "^4.4.6",
+    "bcryptjs": "^3.0.2",
+    "groq-sdk": "^0.20.1",
+    "zod": "^3.24.4",
+    "next": "^15.3.3",
+    "openai": "^4.104.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@trigger.dev/build": "^4.4.6",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "concurrently": "^9.1.2",
+    "prisma": "^6.8.2",
+    "trigger.dev": "^4.4.6",
+    "typescript": "^5.8.3"
+  }
+}
