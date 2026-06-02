@@ -14,9 +14,22 @@ type Contract = {
   uploadedAt: string;
 };
 
+type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+type ClauseAnalysis = {
+  riskLevel: RiskLevel;
+  explanation: string;
+  ambiguousTerms: string[];
+  recommendations: string[];
+};
+
 type Detail = {
   extractedText: string | null;
-  clauses: { index: number; text: string }[];
+  clauses: {
+    index: number;
+    text: string;
+    analysis: ClauseAnalysis | null;
+  }[];
 };
 
 const PROCESSING = new Set([
@@ -24,14 +37,21 @@ const PROCESSING = new Set([
   "EXTRACTING",
   "EXTRACTED",
   "SPLITTING",
+  "SPLIT",
   "ANALYZING",
 ]);
 
 function statusClass(status: string): string {
   if (status === "FAILED") return "badge-err";
-  if (status === "SPLIT" || status === "COMPLETED") return "badge-ok";
+  if (status === "AWAITING_REVIEW" || status === "COMPLETED") return "badge-ok";
   if (PROCESSING.has(status)) return "badge-busy";
   return "badge-info";
+}
+
+function riskClass(level: RiskLevel): string {
+  if (level === "HIGH" || level === "CRITICAL") return "badge-err";
+  if (level === "MEDIUM") return "badge-busy";
+  return "badge-ok";
 }
 
 function formatBytes(bytes: number): string {
@@ -232,7 +252,42 @@ export default function Contracts() {
                         <ol className="clause-list">
                           {detail.clauses.map((cl) => (
                             <li key={cl.index} className="clause">
-                              {cl.text}
+                              <div className="clause-head">
+                                <span className="clause-text">{cl.text}</span>
+                                {cl.analysis && (
+                                  <span
+                                    className={`badge ${riskClass(
+                                      cl.analysis.riskLevel
+                                    )}`}
+                                  >
+                                    {cl.analysis.riskLevel.toLowerCase()} risk
+                                  </span>
+                                )}
+                              </div>
+                              {cl.analysis && (
+                                <div className="clause-analysis">
+                                  <p className="clause-explanation">
+                                    {cl.analysis.explanation}
+                                  </p>
+                                  {cl.analysis.ambiguousTerms.length > 0 && (
+                                    <p className="clause-tags">
+                                      <span className="clause-tags-label">
+                                        Ambiguous:
+                                      </span>{" "}
+                                      {cl.analysis.ambiguousTerms.join(", ")}
+                                    </p>
+                                  )}
+                                  {cl.analysis.recommendations.length > 0 && (
+                                    <ul className="clause-recs">
+                                      {cl.analysis.recommendations.map(
+                                        (rec, i) => (
+                                          <li key={i}>{rec}</li>
+                                        )
+                                      )}
+                                    </ul>
+                                  )}
+                                </div>
+                              )}
                             </li>
                           ))}
                         </ol>

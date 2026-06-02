@@ -74,17 +74,18 @@ model Clause {
 }
 
 model ClauseAnalysis {
-  id          String             @id @default(cuid())
-  clauseId    String             @unique
-  clause      Clause             @relation(fields: [clauseId], references: [id], onDelete: Cascade)
-  riskLevel   RiskLevel
-  summary     String             @db.Text
-  concerns    String[]           @default([])
-  provider    String
-  model       String
-  rawResponse String?            @db.Text
-  createdAt   DateTime           @default(now())
-  decision    ReviewerDecision?
+  id              String            @id @default(cuid())
+  clauseId        String            @unique
+  clause          Clause            @relation(fields: [clauseId], references: [id], onDelete: Cascade)
+  riskLevel       RiskLevel
+  explanation     String            @db.Text
+  ambiguousTerms  String[]          @default([])
+  recommendations String[]          @default([])
+  provider        String
+  model           String
+  rawResponse     String?           @db.Text
+  createdAt       DateTime          @default(now())
+  decision        ReviewerDecision?
 }
 
 enum RiskLevel {

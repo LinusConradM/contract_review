@@ -439,3 +439,49 @@ pre.result {
   color: var(--muted);
   font-size: 0.8rem;
 }
+
+.clause-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.clause-text {
+  flex: 1;
+}
+
+.clause-analysis {
+  margin-top: 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border);
+}
+
+.clause-explanation {
+  margin: 0 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.clause-tags {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--warn);
+}
+
+.clause-tags-label {
+  color: var(--muted);
+}
+
+.clause-recs {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.clause-recs li {
+  color: var(--text);
+  font-size: 0.8rem;
+}

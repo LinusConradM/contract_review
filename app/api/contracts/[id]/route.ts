@@ -28,7 +28,18 @@ export async function GET(
       uploadedAt: true,
       clauses: {
         orderBy: { index: "asc" },
-        select: { index: true, text: true },
+        select: {
+          index: true,
+          text: true,
+          analysis: {
+            select: {
+              riskLevel: true,
+              explanation: true,
+              ambiguousTerms: true,
+              recommendations: true,
+            },
+          },
+        },
       },
     },
   });

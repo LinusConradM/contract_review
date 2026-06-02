@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { extractPdfText } from "@/lib/pdf";
 import { readContractFile } from "@/lib/storage";
 import { splitContractClauses } from "./splitContractClauses";
+import { analyseClause } from "./analyseClause";
 
 export const processContractUpload = task({
   id: "process-contract-upload",
@@ -64,11 +65,43 @@ export const processContractUpload = task({
         throw new Error("Clause splitting failed");
       }
 
+      // Analyse every clause in parallel. Each clause becomes its own child run;
+      // the queue concurrencyLimit on analyseClause throttles LLM calls.
+      await prisma.contract.update({
+        where: { id: contractId },
+        data: { status: "ANALYZING" },
+      });
+
+      const clauses = await prisma.clause.findMany({
+        where: { contractId },
+        orderBy: { index: "asc" },
+        select: { id: true, text: true },
+      });
+
+      const batch = await analyseClause.batchTriggerAndWait(
+        clauses.map((clause) => ({
+          payload: { clauseId: clause.id, text: clause.text },
+        }))
+      );
+
+      const failed = batch.runs.filter((r) => !r.ok).length;
+      if (failed > 0) {
+        throw new Error(
+          `${failed} of ${clauses.length} clause analyses failed`
+        );
+      }
+
+      await prisma.contract.update({
+        where: { id: contractId },
+        data: { status: "AWAITING_REVIEW" },
+      });
+
       return {
         contractId,
         pageCount,
         characters: text.length,
         clauseCount: split.output.clauseCount,
+        analysedClauses: clauses.length,
       };
     } catch (error) {
       const message =
