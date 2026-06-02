@@ -1,9 +1,22 @@
-import { logger, task } from "@trigger.dev/sdk/v3";
+import { logger, task, wait } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
 import { extractPdfText } from "@/lib/pdf";
 import { readContractFile } from "@/lib/storage";
+import { buildReviewReport } from "@/lib/report";
+import { sendReviewReadyEmail } from "@/lib/email";
 import { splitContractClauses } from "./splitContractClauses";
 import { analyseClause } from "./analyseClause";
+
+type ReviewDecision = {
+  approved: boolean;
+  notes?: string;
+  reviewer?: string;
+};
+
+function dashboardUrl(contractId: string): string {
+  const base = process.env.APP_URL || "http://localhost:3000";
+  return `${base.replace(/\/$/, "")}/contracts/${contractId}/review`;
+}
 
 export const processContractUpload = task({
   id: "process-contract-upload",
@@ -91,9 +104,86 @@ export const processContractUpload = task({
         );
       }
 
+      // Aggregate the per-clause analyses into a single structured report,
+      // grouped by risk level (highest first), and persist it.
+      const analysed = await prisma.clause.findMany({
+        where: { contractId },
+        orderBy: { index: "asc" },
+        select: {
+          index: true,
+          text: true,
+          analysis: {
+            select: {
+              riskLevel: true,
+              explanation: true,
+              ambiguousTerms: true,
+              recommendations: true,
+            },
+          },
+        },
+      });
+
+      const report = buildReviewReport(analysed);
+      await prisma.contractSummary.upsert({
+        where: { contractId },
+        create: { contractId, content: JSON.stringify(report) },
+        update: { content: JSON.stringify(report) },
+      });
+      logger.log("Built review report", { contractId, stats: report.stats });
+
+      // Create a waitpoint token. The run suspends at wait.forToken() below
+      // until someone completes this token from the review dashboard. No
+      // timeout — the task checkpoints and frees compute while it waits.
+      const token = await wait.createToken({ tags: [`contract:${contractId}`] });
       await prisma.contract.update({
         where: { id: contractId },
-        data: { status: "AWAITING_REVIEW" },
+        data: { status: "AWAITING_REVIEW", reviewTokenId: token.id },
+      });
+
+      // Notify the owner before suspending, with a link to the dashboard.
+      const owner = await prisma.user.findUnique({
+        where: { id: contract.userId },
+        select: { email: true, name: true },
+      });
+      if (owner) {
+        const email = await sendReviewReadyEmail({
+          to: owner.email,
+          recipientName: owner.name,
+          contractTitle: contract.title,
+          dashboardUrl: dashboardUrl(contractId),
+          stats: {
+            totalClauses: report.stats.totalClauses,
+            byRisk: report.stats.byRisk,
+            clausesWithAmbiguity: report.stats.clausesWithAmbiguity,
+            totalRecommendations: report.stats.totalRecommendations,
+          },
+        });
+        logger.log("Review-ready email dispatched", {
+          contractId,
+          provider: email.provider,
+          sent: email.sent,
+        });
+      }
+
+      logger.log("Suspending for human review", {
+        contractId,
+        tokenId: token.id,
+      });
+      const review = await wait.forToken<ReviewDecision>(token);
+      if (!review.ok) {
+        throw review.error;
+      }
+      const decision = review.output;
+      logger.log("Review token completed", { contractId, decision });
+
+      await prisma.contract.update({
+        where: { id: contractId },
+        data: {
+          status: "COMPLETED",
+          error: decision.approved
+            ? null
+            : `Changes requested${decision.notes ? `: ${decision.notes}` : ""}`,
+        },
       });
 
       return {
@@ -102,6 +192,8 @@ export const processContractUpload = task({
         characters: text.length,
         clauseCount: split.output.clauseCount,
         analysedClauses: clauses.length,
+        stats: report.stats,
+        decision,
       };
     } catch (error) {
       const message =

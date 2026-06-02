@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Contract = {
@@ -240,6 +241,14 @@ export default function Contracts() {
                         ? "Hide raw text"
                         : "View raw text"}
                     </button>
+                  )}
+                  {(c.status === "AWAITING_REVIEW" ||
+                    c.status === "COMPLETED") && (
+                    <Link className="link-btn" href={`/contracts/${c.id}/review`}>
+                      {c.status === "AWAITING_REVIEW"
+                        ? "Review report"
+                        : "View report"}
+                    </Link>
                   )}
                 </div>
 

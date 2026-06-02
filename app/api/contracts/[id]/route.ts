@@ -25,7 +25,9 @@ export async function GET(
       pageCount: true,
       error: true,
       extractedText: true,
+      reviewTokenId: true,
       uploadedAt: true,
+      summary: { select: { content: true, createdAt: true } },
       clauses: {
         orderBy: { index: "asc" },
         select: {
@@ -48,5 +50,15 @@ export async function GET(
     return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, contract });
+  const { summary, ...rest } = contract;
+  let report: unknown = null;
+  if (summary?.content) {
+    try {
+      report = JSON.parse(summary.content);
+    } catch {
+      report = null;
+    }
+  }
+
+  return NextResponse.json({ ok: true, contract: { ...rest, report } });
 }
