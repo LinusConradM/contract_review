@@ -31,21 +31,29 @@ model Session {
 }
 
 model Contract {
-  id           String            @id @default(cuid())
-  title        String
-  fileName     String
-  status       ContractStatus    @default(UPLOADED)
-  uploadedAt   DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  userId       String
-  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clauses      Clause[]
-  summary      ContractSummary?
+  id            String           @id @default(cuid())
+  title         String
+  fileName      String
+  storagePath   String
+  fileSize      Int
+  status        ContractStatus   @default(UPLOADED)
+  extractedText String?          @db.Text
+  pageCount     Int?
+  error         String?          @db.Text
+  uploadedAt    DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clauses       Clause[]
+  summary       ContractSummary?
+
+  @@index([userId])
 }
 
 enum ContractStatus {
   UPLOADED
   EXTRACTING
+  EXTRACTED
   ANALYZING
   AWAITING_REVIEW
   COMPLETED

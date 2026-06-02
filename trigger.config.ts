@@ -6,6 +6,7 @@ export default defineConfig({
   runtime: "node",
   logLevel: "log",
   build: {
+    external: ["pdf-parse"],
     extensions: [
       prismaExtension({
         mode: "legacy",

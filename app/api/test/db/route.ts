@@ -21,6 +21,8 @@ export async function POST() {
       data: {
         title: "Step Zero Test Contract",
         fileName: "test-agreement.pdf",
+        storagePath: "test/not-stored",
+        fileSize: 0,
         userId: user.id,
         clauses: {
           create: [
