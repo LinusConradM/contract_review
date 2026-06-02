@@ -736,3 +736,52 @@ pre.result {
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+.final-report-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.final-report-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.final-report {
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.final-report h2 {
+  font-size: 1.3rem;
+  margin: 1.6rem 0 0.6rem;
+}
+
+.final-report h3 {
+  font-size: 1.1rem;
+  margin: 1.4rem 0 0.5rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.final-report h4 {
+  font-size: 0.98rem;
+  margin: 1.1rem 0 0.3rem;
+  color: var(--accent);
+}
+
+.final-report p {
+  margin: 0.5rem 0;
+}
+
+.final-report ul {
+  margin: 0.5rem 0 0.5rem 1.2rem;
+  padding: 0;
+}
+
+.final-report li {
+  margin: 0.25rem 0;
+}

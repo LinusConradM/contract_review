@@ -7,6 +7,7 @@ import { sendReviewReadyEmail } from "@/lib/email";
 import type { ReviewDecision } from "@/lib/review";
 import { splitContractClauses } from "./splitContractClauses";
 import { analyseClause } from "./analyseClause";
+import { generateSummary } from "./generateSummary";
 
 function dashboardUrl(contractId: string): string {
   const base = process.env.APP_URL || "http://localhost:3000";
@@ -177,6 +178,23 @@ export const processContractUpload = task({
         rejectedClauses: rejected.map((c) => c.clauseIndex),
       });
 
+      // Synthesise the final memorandum from the analyses + reviewer decisions.
+      // triggerAndWait so we get the generated document's metadata back here.
+      await prisma.contract.update({
+        where: { id: contractId },
+        data: { status: "SUMMARIZING" },
+      });
+      const summary = await generateSummary.triggerAndWait({ contractId });
+      if (!summary.ok) {
+        throw new Error("Final summary generation failed");
+      }
+      logger.log("Final summary generated", {
+        contractId,
+        provider: summary.output.provider,
+        model: summary.output.model,
+        characters: summary.output.characters,
+      });
+
       await prisma.contract.update({
         where: { id: contractId },
         data: {
@@ -199,6 +217,7 @@ export const processContractUpload = task({
         analysedClauses: clauses.length,
         stats: report.stats,
         decision,
+        summary: summary.output,
       };
     } catch (error) {
       const message =

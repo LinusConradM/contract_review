@@ -59,6 +59,7 @@ enum ContractStatus {
   SPLIT
   ANALYZING
   AWAITING_REVIEW
+  SUMMARIZING
   COMPLETED
   FAILED
 }
@@ -110,9 +111,13 @@ model ReviewerDecision {
 }
 
 model ContractSummary {
-  id         String   @id @default(cuid())
-  contractId String   @unique
-  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  content    String   @db.Text
-  createdAt  DateTime @default(now())
+  id                  String    @id @default(cuid())
+  contractId          String    @unique
+  contract            Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  content             String    @db.Text
+  finalReport         String?   @db.Text
+  finalReportProvider String?
+  finalReportModel    String?
+  finalReportAt       DateTime?
+  createdAt           DateTime  @default(now())
 }

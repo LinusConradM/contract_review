@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import type { ReviewReport } from "@/lib/report";
 import ReviewDashboard from "@/components/ReviewDashboard";
+import FinalReport from "@/components/FinalReport";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,15 @@ export default async function ReviewPage({
       id: true,
       title: true,
       status: true,
-      summary: { select: { content: true } },
+      summary: {
+        select: {
+          content: true,
+          finalReport: true,
+          finalReportModel: true,
+          finalReportProvider: true,
+          finalReportAt: true,
+        },
+      },
       clauses: {
         select: {
           index: true,
@@ -63,6 +72,8 @@ export default async function ReviewPage({
   }
 
   const awaiting = contract.status === "AWAITING_REVIEW";
+  const finalReport = contract.summary?.finalReport ?? null;
+  const finalReportAt = contract.summary?.finalReportAt ?? null;
 
   return (
     <main>
@@ -73,6 +84,24 @@ export default async function ReviewPage({
       <p className="subtitle">
         Status: <strong>{contract.status.replace(/_/g, " ").toLowerCase()}</strong>
       </p>
+
+      {finalReport && (
+        <section className="card">
+          <div className="final-report-head">
+            <h2>Final review memorandum</h2>
+            <span className="final-report-meta">
+              {contract.summary?.finalReportProvider}
+              {contract.summary?.finalReportModel
+                ? ` · ${contract.summary.finalReportModel}`
+                : ""}
+              {finalReportAt
+                ? ` · ${new Date(finalReportAt).toLocaleString()}`
+                : ""}
+            </span>
+          </div>
+          <FinalReport markdown={finalReport} />
+        </section>
+      )}
 
       {!report ? (
         <p>No review report is available for this contract yet.</p>
