@@ -9,15 +9,27 @@ type Contract = {
   fileSize: number;
   status: string;
   pageCount: number | null;
+  clauseCount: number;
   error: string | null;
   uploadedAt: string;
 };
 
-const PROCESSING = new Set(["UPLOADED", "EXTRACTING", "ANALYZING"]);
+type Detail = {
+  extractedText: string | null;
+  clauses: { index: number; text: string }[];
+};
+
+const PROCESSING = new Set([
+  "UPLOADED",
+  "EXTRACTING",
+  "EXTRACTED",
+  "SPLITTING",
+  "ANALYZING",
+]);
 
 function statusClass(status: string): string {
   if (status === "FAILED") return "badge-err";
-  if (status === "EXTRACTED" || status === "COMPLETED") return "badge-ok";
+  if (status === "SPLIT" || status === "COMPLETED") return "badge-ok";
   if (PROCESSING.has(status)) return "badge-busy";
   return "badge-info";
 }
@@ -33,9 +45,12 @@ export default function Contracts() {
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [text, setText] = useState<string | null>(null);
-  const [textLoading, setTextLoading] = useState(false);
+
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"text" | "clauses">("clauses");
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadContracts = useCallback(async () => {
@@ -49,7 +64,6 @@ export default function Contracts() {
     loadContracts();
   }, [loadContracts]);
 
-  // Poll while anything is still processing.
   useEffect(() => {
     const anyProcessing = contracts.some((c) => PROCESSING.has(c.status));
     if (!anyProcessing) return;
@@ -98,25 +112,34 @@ export default function Contracts() {
     [upload]
   );
 
-  const viewText = useCallback(
-    async (id: string) => {
-      if (expanded === id) {
-        setExpanded(null);
-        setText(null);
+  const open = useCallback(
+    async (id: string, m: "text" | "clauses") => {
+      if (openId === id && mode === m) {
+        setOpenId(null);
+        setDetail(null);
         return;
       }
-      setExpanded(id);
-      setText(null);
-      setTextLoading(true);
+      // Same row, different view: reuse the already-loaded detail.
+      if (openId === id && detail) {
+        setMode(m);
+        return;
+      }
+      setOpenId(id);
+      setMode(m);
+      setDetail(null);
+      setDetailLoading(true);
       try {
         const res = await fetch(`/api/contracts/${id}`);
         const data = await res.json();
-        setText(data.contract?.extractedText ?? "");
+        setDetail({
+          extractedText: data.contract?.extractedText ?? null,
+          clauses: data.contract?.clauses ?? [],
+        });
       } finally {
-        setTextLoading(false);
+        setDetailLoading(false);
       }
     },
-    [expanded]
+    [openId, mode, detail]
   );
 
   return (
@@ -169,6 +192,7 @@ export default function Contracts() {
                     <span className="contract-meta">
                       {c.fileName} · {formatBytes(c.fileSize)}
                       {c.pageCount != null ? ` · ${c.pageCount} pages` : ""}
+                      {c.clauseCount > 0 ? ` · ${c.clauseCount} clauses` : ""}
                     </span>
                   </div>
                   <span className={`badge ${statusClass(c.status)}`}>
@@ -176,19 +200,53 @@ export default function Contracts() {
                   </span>
                 </div>
                 {c.error && <p className="contract-error">{c.error}</p>}
-                {(c.status === "EXTRACTED" || c.status === "COMPLETED") && (
-                  <button className="link-btn" onClick={() => viewText(c.id)}>
-                    {expanded === c.id ? "Hide text" : "View extracted text"}
-                  </button>
-                )}
-                {expanded === c.id && (
-                  <pre className="result">
-                    {textLoading
-                      ? "Loading…"
-                      : text && text.length > 0
-                      ? text
-                      : "(No text was extracted — the PDF may be image-only.)"}
-                  </pre>
+                <div className="contract-actions">
+                  {c.clauseCount > 0 && (
+                    <button
+                      className="link-btn"
+                      onClick={() => open(c.id, "clauses")}
+                    >
+                      {openId === c.id && mode === "clauses"
+                        ? "Hide clauses"
+                        : "View clauses"}
+                    </button>
+                  )}
+                  {(c.pageCount != null || c.status === "EXTRACTED") && (
+                    <button
+                      className="link-btn"
+                      onClick={() => open(c.id, "text")}
+                    >
+                      {openId === c.id && mode === "text"
+                        ? "Hide raw text"
+                        : "View raw text"}
+                    </button>
+                  )}
+                </div>
+
+                {openId === c.id && (
+                  <div className="detail">
+                    {detailLoading ? (
+                      <pre className="result">Loading…</pre>
+                    ) : mode === "clauses" ? (
+                      detail && detail.clauses.length > 0 ? (
+                        <ol className="clause-list">
+                          {detail.clauses.map((cl) => (
+                            <li key={cl.index} className="clause">
+                              {cl.text}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <pre className="result">(No clauses.)</pre>
+                      )
+                    ) : (
+                      <pre className="result">
+                        {detail?.extractedText && detail.extractedText.length > 0
+                          ? detail.extractedText
+                          : "(No text was extracted — the PDF may be image-only.)"}
+                      </pre>
+                    )}
+                  </div>
                 )}
               </li>
             ))}

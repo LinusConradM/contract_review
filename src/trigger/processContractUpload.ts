@@ -2,6 +2,7 @@ import { logger, task } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
 import { extractPdfText } from "@/lib/pdf";
 import { readContractFile } from "@/lib/storage";
+import { splitContractClauses } from "./splitContractClauses";
 
 export const processContractUpload = task({
   id: "process-contract-upload",
@@ -56,7 +57,19 @@ export const processContractUpload = task({
         },
       });
 
-      return { contractId, pageCount, characters: text.length };
+      // Hand off to the clause-splitting child task; it appears as its own
+      // step in the run timeline and advances the contract to SPLIT.
+      const split = await splitContractClauses.triggerAndWait({ contractId });
+      if (!split.ok) {
+        throw new Error("Clause splitting failed");
+      }
+
+      return {
+        contractId,
+        pageCount,
+        characters: text.length,
+        clauseCount: split.output.clauseCount,
+      };
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "PDF extraction failed";

@@ -26,6 +26,10 @@ export async function GET(
       error: true,
       extractedText: true,
       uploadedAt: true,
+      clauses: {
+        orderBy: { index: "asc" },
+        select: { index: true, text: true },
+      },
     },
   });
 

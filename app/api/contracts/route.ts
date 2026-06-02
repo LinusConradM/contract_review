@@ -22,8 +22,15 @@ export async function GET() {
       pageCount: true,
       error: true,
       uploadedAt: true,
+      _count: { select: { clauses: true } },
     },
   });
 
-  return NextResponse.json({ ok: true, contracts });
+  return NextResponse.json({
+    ok: true,
+    contracts: contracts.map(({ _count, ...c }) => ({
+      ...c,
+      clauseCount: _count.clauses,
+    })),
+  });
 }
