@@ -2,6 +2,7 @@ import { createAnthropicProvider } from "./providers/anthropic";
 import { createGeminiProvider } from "./providers/gemini";
 import { createGroqProvider } from "./providers/groq";
 import { createOpenAIProvider } from "./providers/openai";
+import { createOpenRouterProvider } from "./providers/openrouter";
 import type {
   LLMCompletionRequest,
   LLMCompletionResult,
@@ -16,6 +17,7 @@ const providers: Record<LLMProviderName, () => LLMProvider> = {
   anthropic: createAnthropicProvider,
   groq: createGroqProvider,
   gemini: createGeminiProvider,
+  openrouter: createOpenRouterProvider,
 };
 
 function hasKey(name: LLMProviderName): boolean {
@@ -28,11 +30,20 @@ function hasKey(name: LLMProviderName): boolean {
       return !!process.env.ANTHROPIC_API_KEY;
     case "gemini":
       return !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+    case "openrouter":
+      return !!process.env.OPENROUTER_API_KEY;
   }
 }
 
-// Canonical preference order, used when no LLM_PROVIDER is set.
-const CANONICAL_ORDER: LLMProviderName[] = ["groq", "gemini", "openai", "anthropic"];
+// Canonical preference order, used when no LLM_PROVIDER is set. Free providers
+// first (groq -> gemini -> openrouter), then paid (openai -> anthropic).
+const CANONICAL_ORDER: LLMProviderName[] = [
+  "groq",
+  "gemini",
+  "openrouter",
+  "openai",
+  "anthropic",
+];
 
 export function listConfiguredProviders(): LLMProviderName[] {
   return CANONICAL_ORDER.filter(hasKey);
@@ -46,7 +57,7 @@ export function getDefaultProvider(): LLMProviderName {
   const first = listConfiguredProviders()[0];
   if (first) return first;
   throw new Error(
-    "No LLM provider configured. Set GROQ_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY (optionally LLM_PROVIDER)."
+    "No LLM provider configured. Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY (optionally LLM_PROVIDER)."
   );
 }
 
