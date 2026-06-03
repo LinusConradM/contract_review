@@ -797,6 +797,29 @@ pre.result {
   color: #b91c1c;
 }
 
+.stream-cancel-btn {
+  margin-left: 0.75rem;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #b91c1c;
+  background: transparent;
+  border: 1px solid #f1b0b0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.stream-cancel-btn:hover:not(:disabled) {
+  background: #fdeaea;
+  border-color: #e88;
+}
+
+.stream-cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .final-report {
   line-height: 1.65;
   color: var(--text);

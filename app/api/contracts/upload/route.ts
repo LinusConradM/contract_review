@@ -4,13 +4,14 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { saveContractFile } from "@/lib/storage";
+import { detectDocumentKind, extensionForKind } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 function titleFromFileName(fileName: string): string {
-  return fileName.replace(/\.pdf$/i, "").trim() || fileName;
+  return fileName.replace(/\.(pdf|docx)$/i, "").trim() || fileName;
 }
 
 export async function POST(request: Request) {
@@ -32,11 +33,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const isPdfType = file.type === "application/pdf";
-  const hasPdfExt = /\.pdf$/i.test(file.name);
-  if (!isPdfType && !hasPdfExt) {
+  const hasAcceptedExt = /\.(pdf|docx)$/i.test(file.name);
+  const acceptedType =
+    file.type === "application/pdf" ||
+    file.type ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (!acceptedType && !hasAcceptedExt) {
     return NextResponse.json(
-      { ok: false, error: "Only PDF files are accepted." },
+      { ok: false, error: "Only PDF and Word (.docx) files are accepted." },
       { status: 400 }
     );
   }
@@ -50,10 +54,12 @@ export async function POST(request: Request) {
 
   const bytes = Buffer.from(await file.arrayBuffer());
 
-  // Confirm the actual contents are a PDF, not just the name/type.
-  if (bytes.subarray(0, 5).toString("latin1") !== "%PDF-") {
+  // Confirm the actual contents are a format we support (magic bytes), not just
+  // a matching name or declared MIME type.
+  const kind = detectDocumentKind(file.name, file.type, bytes);
+  if (!kind) {
     return NextResponse.json(
-      { ok: false, error: "That file is not a valid PDF." },
+      { ok: false, error: "That file is not a valid PDF or Word document." },
       { status: 400 }
     );
   }
@@ -69,7 +75,11 @@ export async function POST(request: Request) {
     },
   });
 
-  const storagePath = await saveContractFile(contract.id, bytes);
+  const storagePath = await saveContractFile(
+    contract.id,
+    bytes,
+    extensionForKind(kind)
+  );
   await prisma.contract.update({
     where: { id: contract.id },
     data: { storagePath },
@@ -83,6 +93,11 @@ export async function POST(request: Request) {
         // Tags make this run filterable in the Trigger.dev dashboard — by the
         // contract it belongs to and the user who owns it.
         tags: [`contract:${contract.id}`, `user:${user.id}`, "stage:orchestration"],
+        // Multi-tenancy: each user gets their own isolated orchestration queue,
+        // so one user's backlog can never starve another's. (The per-clause LLM
+        // queue keeps its global limit deliberately, as a shared provider-rate
+        // guard rather than a per-tenant one.)
+        concurrencyKey: user.id,
       }
     );
 

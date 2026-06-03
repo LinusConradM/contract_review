@@ -1,6 +1,6 @@
 import { logger, metadata, task, wait } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
-import { extractPdfText } from "@/lib/pdf";
+import { extractDocument, kindFromStoragePath } from "@/lib/documents";
 import { readContractFile } from "@/lib/storage";
 import { buildReviewReport } from "@/lib/report";
 import { sendReviewReadyEmail } from "@/lib/email";
@@ -8,6 +8,7 @@ import type { ReviewDecision } from "@/lib/review";
 import { splitContractClauses } from "./splitContractClauses";
 import { analyseClause } from "./analyseClause";
 import { generateSummary } from "./generateSummary";
+import { reviewReminder } from "./reviewReminder";
 
 function dashboardUrl(contractId: string): string {
   const base = process.env.APP_URL || "http://localhost:3000";
@@ -49,13 +50,17 @@ export const processContractUpload = task({
 
     try {
       const bytes = await readContractFile(contract.storagePath);
-      logger.log("Read PDF from storage", {
+      const kind = kindFromStoragePath(contract.storagePath);
+      logger.log("Read document from storage", {
         storagePath: contract.storagePath,
+        kind,
         bytes: bytes.length,
       });
+      metadata.set("documentKind", kind);
 
-      const { text, pageCount } = await extractPdfText(bytes);
+      const { text, pageCount } = await extractDocument(kind, bytes);
       logger.log("Extracted text", {
+        kind,
         pageCount,
         characters: text.length,
       });
@@ -179,6 +184,20 @@ export const processContractUpload = task({
         where: { id: contractId },
         data: { status: "AWAITING_REVIEW", reviewTokenId: token.id },
       });
+
+      // Schedule a follow-up reminder as a separate, detached run (note:
+      // trigger(), not triggerAndWait — this orchestration must not block on a
+      // run that sleeps for a week). It checkpoints on wait.for() and only emails
+      // if the contract is still unactioned when it wakes. The idempotency key
+      // makes this safe if the parent retries.
+      await reviewReminder.trigger(
+        { contractId },
+        {
+          tags: [`contract:${contractId}`, `user:${contract.userId}`, "stage:reminder"],
+          concurrencyKey: contract.userId,
+          idempotencyKey: `review-reminder:${contractId}`,
+        }
+      );
 
       // Notify the owner before suspending, with a link to the dashboard.
       const owner = await prisma.user.findUnique({

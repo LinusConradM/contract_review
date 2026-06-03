@@ -43,7 +43,7 @@ const PROCESSING = new Set([
 ]);
 
 function statusClass(status: string): string {
-  if (status === "FAILED") return "badge-err";
+  if (status === "FAILED" || status === "CANCELLED") return "badge-err";
   if (status === "AWAITING_REVIEW" || status === "COMPLETED") return "badge-ok";
   if (PROCESSING.has(status)) return "badge-busy";
   return "badge-info";
@@ -95,8 +95,14 @@ export default function Contracts() {
   const upload = useCallback(
     async (file: File) => {
       setError(null);
-      if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
-        setError("Only PDF files are accepted.");
+      const docxMime =
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      const acceptable =
+        /\.(pdf|docx)$/i.test(file.name) ||
+        file.type === "application/pdf" ||
+        file.type === docxMime;
+      if (!acceptable) {
+        setError("Only PDF and Word (.docx) files are accepted.");
         return;
       }
       setUploading(true);
@@ -182,7 +188,7 @@ export default function Contracts() {
           <input
             ref={inputRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -192,9 +198,9 @@ export default function Contracts() {
           <p className="dropzone-text">
             {uploading
               ? "Uploading…"
-              : "Drag a PDF here, or click to choose a file"}
+              : "Drag a PDF or Word file here, or click to choose"}
           </p>
-          <p className="dropzone-hint">PDF only · up to 25 MB</p>
+          <p className="dropzone-hint">PDF or Word (.docx) · up to 25 MB</p>
         </div>
         {error && <p className="form-error">{error}</p>}
       </section>
@@ -202,7 +208,7 @@ export default function Contracts() {
       <section className="card">
         <h2>Your contracts</h2>
         {contracts.length === 0 ? (
-          <p>No contracts yet. Upload a PDF to get started.</p>
+          <p>No contracts yet. Upload a PDF or Word file to get started.</p>
         ) : (
           <ul className="contract-list">
             {contracts.map((c) => (

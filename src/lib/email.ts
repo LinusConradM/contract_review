@@ -119,6 +119,74 @@ export async function sendReviewReadyEmail(
   return { sent: true, provider: "resend", id: data?.id, to: params.to };
 }
 
+export type ReminderEmailParams = {
+  to: string;
+  recipientName?: string | null;
+  contractTitle: string;
+  dashboardUrl: string;
+  // How long the contract has been waiting, e.g. "7 days".
+  waitingFor: string;
+};
+
+// Nudges the owner about a contract still sitting in AWAITING_REVIEW. Same
+// Resend / log fallback as the other emails, so it works without an API key.
+export async function sendReviewReminderEmail(
+  params: ReminderEmailParams
+): Promise<SendResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM || DEFAULT_FROM;
+  const subject = `Reminder: "${params.contractTitle}" is still awaiting your review`;
+  const intro = `Hi${
+    params.recipientName ? ` ${params.recipientName}` : ""
+  }, your contract "${params.contractTitle}" has been waiting for review for ${
+    params.waitingFor
+  } and hasn't been actioned yet.`;
+
+  if (!apiKey) {
+    console.warn(
+      "[email] RESEND_API_KEY not set — logging reminder email instead of sending."
+    );
+    console.warn(
+      JSON.stringify(
+        { to: params.to, from, subject, dashboardUrl: params.dashboardUrl },
+        null,
+        2
+      )
+    );
+    console.warn(`${intro}\n\nReview it: ${params.dashboardUrl}`);
+    return { sent: false, provider: "log", to: params.to };
+  }
+
+  const html = `
+  <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; color: #1a2332;">
+    <h2 style="margin: 0 0 0.5rem;">Still awaiting your review</h2>
+    <p>${escapeHtml(intro)}</p>
+    <p style="margin: 1.5rem 0;">
+      <a href="${escapeHtml(params.dashboardUrl)}"
+         style="display: inline-block; background: #3b82f6; color: #fff; text-decoration: none; padding: 0.6rem 1.2rem; border-radius: 6px;">
+        Review contract
+      </a>
+    </p>
+    <p style="color: #8b9cb3; font-size: 0.85rem;">The analysis run is paused and resumes once you submit your review.</p>
+  </div>`;
+  const text = `${intro}\n\nReview it: ${params.dashboardUrl}`;
+
+  const resend = new Resend(apiKey);
+  const { data, error } = await resend.emails.send({
+    from,
+    to: params.to,
+    subject,
+    html,
+    text,
+  });
+
+  if (error) {
+    throw new Error(`Resend failed: ${error.message ?? String(error)}`);
+  }
+
+  return { sent: true, provider: "resend", id: data?.id, to: params.to };
+}
+
 export type SummaryEmailParams = {
   to: string;
   recipientName?: string | null;

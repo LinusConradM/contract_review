@@ -27,14 +27,41 @@ export default function SummaryStream({
   accessToken,
   mode = "live",
   backHref,
+  contractId,
 }: {
   runId: string;
   accessToken: string;
   mode?: "live" | "replay";
   backHref?: string;
+  // When provided (live mode), enables a Cancel button that aborts the run.
+  contractId?: string;
 }) {
   const router = useRouter();
   const isLive = mode === "live";
+
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  async function cancel() {
+    if (!contractId) return;
+    setCancelError(null);
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/cancel`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        setCancelError(data?.error ?? "Could not cancel.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setCancelError("Could not cancel. Please try again.");
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   const { parts, error } = useRealtimeStream<string>(
     runId,
@@ -99,8 +126,20 @@ export default function SummaryStream({
           {isLive ? "Final review memorandum" : "Replaying generation"}
         </h2>
         {isLive ? (
-          <span className="final-report-meta stream-live">
-            <span className="stream-dot" aria-hidden /> streaming live
+          <span className="final-report-meta replay-controls">
+            <span className="stream-live">
+              <span className="stream-dot" aria-hidden /> streaming live
+            </span>
+            {contractId && (
+              <button
+                type="button"
+                className="stream-cancel-btn"
+                onClick={cancel}
+                disabled={cancelling}
+              >
+                {cancelling ? "Cancelling…" : "Cancel"}
+              </button>
+            )}
           </span>
         ) : (
           <span className="final-report-meta replay-controls">
@@ -117,6 +156,8 @@ export default function SummaryStream({
           </span>
         )}
       </div>
+
+      {cancelError && <p className="stream-error">{cancelError}</p>}
 
       {error ? (
         <p className="stream-error">

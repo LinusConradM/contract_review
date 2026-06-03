@@ -155,7 +155,11 @@ export default async function ReviewPage({
       )}
 
       {showLiveStream && streamToken && contract.runId && (
-        <SummaryStream runId={contract.runId} accessToken={streamToken} />
+        <SummaryStream
+          runId={contract.runId}
+          accessToken={streamToken}
+          contractId={contract.id}
+        />
       )}
 
       {!report ? (

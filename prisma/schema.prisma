@@ -65,6 +65,7 @@ enum ContractStatus {
   SUMMARIZING
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 model Clause {

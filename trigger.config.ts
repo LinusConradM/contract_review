@@ -6,7 +6,7 @@ export default defineConfig({
   runtime: "node",
   logLevel: "log",
   build: {
-    external: ["pdf-parse"],
+    external: ["pdf-parse", "mammoth"],
     extensions: [
       prismaExtension({
         mode: "legacy",
