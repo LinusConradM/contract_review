@@ -1,4 +1,4 @@
-import { logger, task, wait } from "@trigger.dev/sdk/v3";
+import { logger, metadata, task, wait } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
 import { extractPdfText } from "@/lib/pdf";
 import { readContractFile } from "@/lib/storage";
@@ -34,6 +34,14 @@ export const processContractUpload = task({
       throw new Error(`Contract ${contractId} not found`);
     }
 
+    // Seed run metadata. This structured object is visible in the dashboard's
+    // run view and over the SDK, and we mutate it as the workflow advances so
+    // it always reflects the live stage and tallies.
+    metadata.set("contractId", contractId);
+    metadata.set("userId", contract.userId);
+    metadata.set("stage", "extracting");
+    metadata.set("errors", 0);
+
     await prisma.contract.update({
       where: { id: contractId },
       data: { status: "EXTRACTING", error: null },
@@ -51,6 +59,8 @@ export const processContractUpload = task({
         pageCount,
         characters: text.length,
       });
+      metadata.set("pageCount", pageCount);
+      metadata.set("characters", text.length);
 
       if (text.length === 0) {
         logger.warn(
@@ -68,14 +78,22 @@ export const processContractUpload = task({
       });
 
       // Hand off to the clause-splitting child task; it appears as its own
-      // step in the run timeline and advances the contract to SPLIT.
-      const split = await splitContractClauses.triggerAndWait({ contractId });
+      // step in the run timeline and advances the contract to SPLIT. Tags are
+      // passed explicitly (they don't inherit) so the child is filterable too.
+      metadata.set("stage", "splitting");
+      const split = await splitContractClauses.triggerAndWait(
+        { contractId },
+        { tags: [`contract:${contractId}`, `user:${contract.userId}`, "stage:split"] }
+      );
       if (!split.ok) {
+        metadata.increment("errors", 1);
         throw new Error("Clause splitting failed");
       }
+      metadata.set("clauses.total", split.output.clauseCount);
 
       // Analyse every clause in parallel. Each clause becomes its own child run;
       // the queue concurrencyLimit on analyseClause throttles LLM calls.
+      metadata.set("stage", "analyzing");
       await prisma.contract.update({
         where: { id: contractId },
         data: { status: "ANALYZING" },
@@ -84,17 +102,29 @@ export const processContractUpload = task({
       const clauses = await prisma.clause.findMany({
         where: { contractId },
         orderBy: { index: "asc" },
-        select: { id: true, text: true },
+        select: { id: true, index: true, text: true },
       });
 
+      // The batch trigger view shows all of these parallel child runs at a
+      // glance. Each carries the contract/user tags plus its clause number.
       const batch = await analyseClause.batchTriggerAndWait(
         clauses.map((clause) => ({
           payload: { clauseId: clause.id, text: clause.text },
+          options: {
+            tags: [
+              `contract:${contractId}`,
+              `user:${contract.userId}`,
+              "stage:analysis",
+              `clause:${clause.index}`,
+            ],
+          },
         }))
       );
 
       const failed = batch.runs.filter((r) => !r.ok).length;
+      metadata.set("errors.clauseAnalysis", failed);
       if (failed > 0) {
+        metadata.increment("errors", failed);
         throw new Error(
           `${failed} of ${clauses.length} clause analyses failed`
         );
@@ -127,9 +157,23 @@ export const processContractUpload = task({
       });
       logger.log("Built review report", { contractId, stats: report.stats });
 
+      // Surface the risk breakdown on the run so the dashboard shows, at a
+      // glance, how many clauses landed in each risk band.
+      metadata.set("clauses.analysed", report.stats.analysedClauses);
+      metadata.set("risk", {
+        critical: report.stats.byRisk.CRITICAL,
+        high: report.stats.byRisk.HIGH,
+        medium: report.stats.byRisk.MEDIUM,
+        low: report.stats.byRisk.LOW,
+      });
+      metadata.set("clausesWithAmbiguity", report.stats.clausesWithAmbiguity);
+      metadata.set("recommendations", report.stats.totalRecommendations);
+
       // Create a waitpoint token. The run suspends at wait.forToken() below
       // until someone completes this token from the review dashboard. No
       // timeout — the task checkpoints and frees compute while it waits.
+      metadata.set("stage", "awaiting_review");
+      metadata.set("review.status", "pending");
       const token = await wait.createToken({ tags: [`contract:${contractId}`] });
       await prisma.contract.update({
         where: { id: contractId },
@@ -177,15 +221,23 @@ export const processContractUpload = task({
         reviewer: decision.reviewer,
         rejectedClauses: rejected.map((c) => c.clauseIndex),
       });
+      metadata.set("review.status", decision.approved ? "approved" : "changes_requested");
+      metadata.set("review.reviewer", decision.reviewer ?? null);
+      metadata.set("review.rejectedClauses", rejected.length);
 
       // Synthesise the final memorandum from the analyses + reviewer decisions.
       // triggerAndWait so we get the generated document's metadata back here.
+      metadata.set("stage", "summarizing");
       await prisma.contract.update({
         where: { id: contractId },
         data: { status: "SUMMARIZING" },
       });
-      const summary = await generateSummary.triggerAndWait({ contractId });
+      const summary = await generateSummary.triggerAndWait(
+        { contractId },
+        { tags: [`contract:${contractId}`, `user:${contract.userId}`, "stage:summary"] }
+      );
       if (!summary.ok) {
+        metadata.increment("errors", 1);
         throw new Error("Final summary generation failed");
       }
       logger.log("Final summary generated", {
@@ -194,7 +246,12 @@ export const processContractUpload = task({
         model: summary.output.model,
         characters: summary.output.characters,
       });
+      metadata.set("summary.provider", summary.output.provider);
+      metadata.set("summary.model", summary.output.model);
+      metadata.set("summary.characters", summary.output.characters);
+      metadata.set("summary.emailed", summary.output.emailed);
 
+      metadata.set("stage", "completed");
       await prisma.contract.update({
         where: { id: contractId },
         data: {
@@ -223,6 +280,9 @@ export const processContractUpload = task({
       const message =
         error instanceof Error ? error.message : "PDF extraction failed";
       logger.error("Extraction failed", { contractId, message });
+      metadata.set("stage", "failed");
+      metadata.set("failureReason", message);
+      metadata.increment("errors", 1);
 
       await prisma.contract.update({
         where: { id: contractId },

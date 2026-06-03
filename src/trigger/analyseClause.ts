@@ -1,4 +1,4 @@
-import { logger, task } from "@trigger.dev/sdk/v3";
+import { logger, metadata, tags, task } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
 import { analyseClauseText } from "@/lib/analysis";
 
@@ -34,6 +34,20 @@ export const analyseClause = task({
       finishReason: analysis.finishReason,
       totalTokens: analysis.usage.totalTokens,
     });
+
+    // Tag the child run with the provider that served it and the risk band it
+    // landed in — both useful dashboard filters (e.g. "all high-risk clauses",
+    // "everything analysed by gemini").
+    await tags.add([
+      `provider:${analysis.provider}`,
+      `risk:${analysis.riskLevel.toLowerCase()}`,
+    ]);
+    metadata.set("riskLevel", analysis.riskLevel);
+    metadata.set("provider", analysis.provider);
+    metadata.set("model", analysis.model);
+    metadata.set("ambiguousTerms", analysis.ambiguousTerms.length);
+    metadata.set("recommendations", analysis.recommendations.length);
+    metadata.set("totalTokens", analysis.usage.totalTokens);
 
     const fields = {
       riskLevel: analysis.riskLevel,

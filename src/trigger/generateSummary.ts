@@ -1,4 +1,4 @@
-import { logger, task } from "@trigger.dev/sdk/v3";
+import { logger, metadata, tags, task } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
 import { streamFinalSummary } from "@/lib/summary";
 import type { SummaryClauseInput } from "@/lib/summary";
@@ -116,6 +116,15 @@ export const generateSummary = task({
       rejected,
     });
 
+    await tags.add(`provider:${result.provider}`);
+    metadata.set("provider", result.provider);
+    metadata.set("model", result.model);
+    metadata.set("totalTokens", result.usage.totalTokens);
+    metadata.set("characters", document.length);
+    metadata.set("clauses", clauses.length);
+    metadata.set("approved", approved);
+    metadata.set("rejected", rejected);
+
     // The structured ContractSummary already exists from the pre-review report;
     // attach the final prose document without disturbing `content`.
     await prisma.contractSummary.upsert({
@@ -167,6 +176,8 @@ export const generateSummary = task({
         });
       }
     }
+
+    metadata.set("emailed", emailed);
 
     return {
       contractId,

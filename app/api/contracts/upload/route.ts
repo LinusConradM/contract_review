@@ -78,7 +78,12 @@ export async function POST(request: Request) {
   try {
     const handle = await tasks.trigger<typeof processContractUpload>(
       "process-contract-upload",
-      { contractId: contract.id }
+      { contractId: contract.id },
+      {
+        // Tags make this run filterable in the Trigger.dev dashboard — by the
+        // contract it belongs to and the user who owns it.
+        tags: [`contract:${contract.id}`, `user:${user.id}`, "stage:orchestration"],
+      }
     );
 
     // Persist the run id so the review page can subscribe to its realtime

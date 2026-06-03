@@ -1,4 +1,4 @@
-import { logger, task } from "@trigger.dev/sdk/v3";
+import { logger, metadata, tags, task } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
 import { splitIntoClauses } from "@/lib/clauses";
 
@@ -37,6 +37,14 @@ export const splitContractClauses = task({
         model,
         usedFallback,
       });
+
+      // Tag this run with the provider that actually served the request (after
+      // any fallback) so you can filter, e.g., "all runs that hit groq".
+      await tags.add(`provider:${provider}`);
+      metadata.set("provider", provider);
+      metadata.set("model", model);
+      metadata.set("usedFallback", usedFallback);
+      metadata.set("clauseCount", clauses.length);
 
       if (clauses.length === 0) {
         throw new Error("Clause splitting produced no clauses");
