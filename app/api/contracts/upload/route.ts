@@ -81,6 +81,13 @@ export async function POST(request: Request) {
       { contractId: contract.id }
     );
 
+    // Persist the run id so the review page can subscribe to its realtime
+    // "summary-output" stream when the final memorandum is generated.
+    await prisma.contract.update({
+      where: { id: contract.id },
+      data: { runId: handle.id },
+    });
+
     return NextResponse.json({
       ok: true,
       contractId: contract.id,

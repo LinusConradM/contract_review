@@ -41,6 +41,9 @@ model Contract {
   pageCount     Int?
   error         String?          @db.Text
   reviewTokenId String?
+  // The process-contract-upload run id. The frontend subscribes to this run's
+  // "summary-output" realtime stream to render the final memorandum live.
+  runId         String?
   uploadedAt    DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   userId        String

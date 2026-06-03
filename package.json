@@ -17,6 +17,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@prisma/client": "^6.8.2",
+    "@trigger.dev/react-hooks": "^4.4.6",
     "@trigger.dev/sdk": "^4.4.6",
     "bcryptjs": "^3.0.2",
     "groq-sdk": "^0.20.1",
@@ -39,5 +40,11 @@
     "prisma": "^6.8.2",
     "trigger.dev": "^4.4.6",
     "typescript": "^5.8.3"
+  },
+  "comments": {
+    "overrides": "@trigger.dev/core@4.4.6's published registry manifest lists an unpublished internal dep '@trigger.dev/database@0.0.2', which breaks a clean `npm install`. The real package tarball does not depend on it (only type-only .d.ts references it, skipped via skipLibCheck), so we alias the phantom to a harmless, already-present package to make installs reproducible."
+  },
+  "overrides": {
+    "@trigger.dev/database": "npm:dequal@2.0.3"
   }
 }

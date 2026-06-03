@@ -39,7 +39,20 @@ export interface LLMCompletionResult {
   usage: LLMUsage;
 }
 
+// A streaming completion. `textStream` yields token deltas as they arrive;
+// `completed` resolves with the same standardised metadata as a non-streaming
+// call once the stream has been fully consumed. The shape is identical across
+// providers so callers (and the realtime pipe) never branch on the provider.
+export interface LLMStreamResult {
+  provider: LLMProviderName;
+  model: string;
+  textStream: AsyncIterable<string>;
+  completed: Promise<LLMCompletionResult>;
+}
+
 export interface LLMProvider {
   name: LLMProviderName;
   complete(request: LLMCompletionRequest): Promise<LLMCompletionResult>;
+  // Optional: not every provider must support streaming, but all of ours do.
+  stream?(request: LLMCompletionRequest): Promise<LLMStreamResult>;
 }

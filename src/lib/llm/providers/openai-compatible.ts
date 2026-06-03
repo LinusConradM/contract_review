@@ -3,8 +3,10 @@ import type {
   LLMCompletionRequest,
   LLMCompletionResult,
   LLMProviderName,
+  LLMStreamResult,
 } from "../types";
 import { mapOpenAIFinishReason, openAIUsage } from "../metadata";
+import { openAICompatibleStream } from "../streaming";
 
 // Several providers (OpenAI, Google Gemini, OpenRouter) speak the OpenAI
 // chat-completions protocol, differing only in base URL, key, and default
@@ -23,10 +25,9 @@ export type OpenAICompatibleConfig = {
   buildHeaders?: () => Record<string, string>;
 };
 
-export async function completeOpenAICompatible(
-  cfg: OpenAICompatibleConfig,
-  request: LLMCompletionRequest
-): Promise<LLMCompletionResult> {
+// Resolves the API key, client and model from a provider config + request.
+// Shared by the blocking and streaming entry points.
+function prepare(cfg: OpenAICompatibleConfig, request: LLMCompletionRequest) {
   const apiKey = cfg.apiKeyEnv
     .map((name) => process.env[name])
     .find((value) => !!value);
@@ -44,6 +45,15 @@ export async function completeOpenAICompatible(
     request.model ??
     (cfg.modelEnv ? process.env[cfg.modelEnv] : undefined) ??
     cfg.defaultModel;
+
+  return { client, model };
+}
+
+export async function completeOpenAICompatible(
+  cfg: OpenAICompatibleConfig,
+  request: LLMCompletionRequest
+): Promise<LLMCompletionResult> {
+  const { client, model } = prepare(cfg, request);
 
   const response = await client.chat.completions.create({
     model,
@@ -68,4 +78,27 @@ export async function completeOpenAICompatible(
     finishReason: mapOpenAIFinishReason(choice?.finish_reason),
     usage: openAIUsage(response.usage),
   };
+}
+
+export async function streamOpenAICompatible(
+  cfg: OpenAICompatibleConfig,
+  request: LLMCompletionRequest
+): Promise<LLMStreamResult> {
+  const { client, model } = prepare(cfg, request);
+
+  const source = await client.chat.completions.create({
+    model,
+    max_tokens: request.maxTokens ?? 512,
+    temperature: request.temperature ?? 0.2,
+    stream: true,
+    // Ask for a final usage chunk; providers that don't support it simply omit
+    // it and usage falls back to null — the standardised shape is unchanged.
+    stream_options: { include_usage: true },
+    messages: request.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
+  });
+
+  return openAICompatibleStream(cfg.name, model, source);
 }

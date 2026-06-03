@@ -1,7 +1,9 @@
 import { logger, task } from "@trigger.dev/sdk/v3";
 import { prisma } from "@/lib/db";
-import { generateFinalSummary } from "@/lib/summary";
+import { streamFinalSummary } from "@/lib/summary";
 import type { SummaryClauseInput } from "@/lib/summary";
+import { summaryStream } from "@/lib/streams";
+import { sendSummaryEmail } from "@/lib/email";
 
 export const generateSummary = task({
   id: "generate-summary",
@@ -24,6 +26,7 @@ export const generateSummary = task({
       select: {
         id: true,
         title: true,
+        user: { select: { email: true, name: true } },
         clauses: {
           orderBy: { index: "asc" },
           select: {
@@ -72,23 +75,42 @@ export const generateSummary = task({
       );
     }
 
-    const summary = await generateFinalSummary({
+    // Stream the memorandum from the LLM token-by-token and pipe those tokens to
+    // the realtime stream on the PARENT run (process-contract-upload), which is
+    // the run the frontend subscribes to. The browser renders each token as it
+    // arrives; refreshing replays the chunks already stored on the stream.
+    const { textStream, completed, provider } = await streamFinalSummary({
       title: contract.title,
       clauses,
     });
+
+    const { waitUntilComplete } = summaryStream.pipe(textStream, {
+      target: "parent",
+    });
+
+    // Block until every token has been forwarded to the realtime stream.
+    await waitUntilComplete();
+
+    // `completed` resolves once the stream is fully consumed (which the pipe
+    // above did), giving us the full document + standardised metadata.
+    const result = await completed;
+    const document = result.text.trim();
+    if (!document) {
+      throw new Error("LLM returned an empty summary document");
+    }
 
     const approved = clauses.filter((c) => c.reviewer?.approved).length;
     const rejected = clauses.filter(
       (c) => c.reviewer && !c.reviewer.approved
     ).length;
 
-    logger.log("Generated final summary", {
+    logger.log("Generated final summary (streamed)", {
       contractId,
-      provider: summary.provider,
-      model: summary.model,
-      finishReason: summary.finishReason,
-      totalTokens: summary.usage.totalTokens,
-      characters: summary.document.length,
+      provider: result.provider,
+      model: result.model,
+      finishReason: result.finishReason,
+      totalTokens: result.usage.totalTokens,
+      characters: document.length,
       clauses: clauses.length,
       approved,
       rejected,
@@ -101,27 +123,61 @@ export const generateSummary = task({
       create: {
         contractId,
         content: "{}",
-        finalReport: summary.document,
-        finalReportProvider: summary.provider,
-        finalReportModel: summary.model,
+        finalReport: document,
+        finalReportProvider: result.provider,
+        finalReportModel: result.model,
         finalReportAt: new Date(),
       },
       update: {
-        finalReport: summary.document,
-        finalReportProvider: summary.provider,
-        finalReportModel: summary.model,
+        finalReport: document,
+        finalReportProvider: result.provider,
+        finalReportModel: result.model,
         finalReportAt: new Date(),
       },
     });
 
+    // Alternative delivery channel: email the full memorandum once streaming is
+    // done. Falls back to logging when RESEND_API_KEY is unset.
+    const dashboardUrl = `${
+      process.env.APP_URL || "http://localhost:3000"
+    }/contracts/${contractId}/review`;
+    let emailed = false;
+    if (contract.user?.email) {
+      try {
+        const sent = await sendSummaryEmail({
+          to: contract.user.email,
+          recipientName: contract.user.name,
+          contractTitle: contract.title,
+          dashboardUrl,
+          markdown: document,
+        });
+        emailed = sent.sent;
+        logger.log("Summary email dispatched", {
+          contractId,
+          to: sent.to,
+          provider: sent.provider,
+          sent: sent.sent,
+        });
+      } catch (error) {
+        // Email is a best-effort secondary channel — don't fail the run (and
+        // lose the stored report) if delivery hiccups.
+        logger.error("Failed to send summary email", {
+          contractId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     return {
       contractId,
-      provider: summary.provider,
-      model: summary.model,
-      characters: summary.document.length,
+      provider: result.provider,
+      model: result.model,
+      characters: document.length,
       clauses: clauses.length,
       approved,
       rejected,
+      streamedFrom: provider,
+      emailed,
     };
   },
 });

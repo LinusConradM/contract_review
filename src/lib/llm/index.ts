@@ -8,6 +8,7 @@ import type {
   LLMCompletionResult,
   LLMProvider,
   LLMProviderName,
+  LLMStreamResult,
 } from "./types";
 
 export type {
@@ -16,6 +17,7 @@ export type {
   LLMFinishReason,
   LLMMessage,
   LLMProviderName,
+  LLMStreamResult,
   LLMUsage,
 } from "./types";
 
@@ -125,5 +127,55 @@ export async function complete(
   const detail = lastError instanceof Error ? lastError.message : String(lastError);
   throw new Error(
     `All configured LLM providers failed (${order.join(", ")}). Last error: ${detail}`
+  );
+}
+
+// Streaming counterpart to complete(). Mirrors the same provider-selection and
+// fallback behaviour: an explicit provider is honoured as-is, otherwise it walks
+// the configured order. Fallback only applies while establishing the stream
+// (e.g. a 429 before any tokens arrive); once tokens start flowing, errors
+// surface on the returned `completed` promise rather than switching providers.
+export async function streamComplete(
+  request: LLMCompletionRequest
+): Promise<LLMStreamResult> {
+  type StreamFn = NonNullable<LLMProvider["stream"]>;
+  const requireStream = (provider: LLMProvider): StreamFn => {
+    if (!provider.stream) {
+      throw new Error(`Provider "${provider.name}" does not support streaming`);
+    }
+    return provider.stream.bind(provider);
+  };
+
+  if (request.provider) {
+    const provider = getProvider(request.provider);
+    return requireStream(provider)(request);
+  }
+
+  const order = getProviderOrder();
+  if (order.length === 0) {
+    getDefaultProvider();
+  }
+
+  let lastError: unknown;
+  for (let i = 0; i < order.length; i++) {
+    const name = order[i];
+    try {
+      const provider = getProvider(name);
+      if (!provider.stream) continue;
+      return await provider.stream(request);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const next = order[i + 1];
+      console.warn(
+        `[llm] streaming provider "${name}" failed: ${message}` +
+          (next ? ` — falling back to "${next}"` : " — no more providers to try")
+      );
+    }
+  }
+
+  const detail = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(
+    `All configured LLM providers failed to stream (${order.join(", ")}). Last error: ${detail}`
   );
 }

@@ -1,5 +1,5 @@
-import { complete } from "@/lib/llm";
-import type { LLMFinishReason, LLMUsage } from "@/lib/llm";
+import { complete, streamComplete } from "@/lib/llm";
+import type { LLMFinishReason, LLMMessage, LLMStreamResult, LLMUsage } from "@/lib/llm";
 import type { RiskLevel } from "./analysis";
 
 export type ReviewerOutcome = {
@@ -130,14 +130,21 @@ ${header}
 ${body}`;
 }
 
+// The system + user messages for the memorandum. Shared by the blocking and
+// streaming entry points so both produce an identical document for the same
+// input.
+export function buildSummaryMessages(input: ContractSummaryInput): LLMMessage[] {
+  return [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: buildUserPrompt(input) },
+  ];
+}
+
 export async function generateFinalSummary(
   input: ContractSummaryInput
 ): Promise<FinalSummary> {
   const result = await complete({
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: buildUserPrompt(input) },
-    ],
+    messages: buildSummaryMessages(input),
     maxTokens: 4000,
     temperature: 0.3,
   });
@@ -154,4 +161,18 @@ export async function generateFinalSummary(
     finishReason: result.finishReason,
     usage: result.usage,
   };
+}
+
+// Streaming variant: returns the token stream (to pipe to the realtime stream)
+// plus a `completed` promise that resolves with the final document + metadata
+// once the stream is fully consumed. Provider-agnostic — uses the same fallback
+// chain as the blocking call.
+export async function streamFinalSummary(
+  input: ContractSummaryInput
+): Promise<LLMStreamResult> {
+  return streamComplete({
+    messages: buildSummaryMessages(input),
+    maxTokens: 4000,
+    temperature: 0.3,
+  });
 }
